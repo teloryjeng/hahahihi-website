@@ -2,7 +2,6 @@ const express = require('express');
 const { Pool } = require('pg');
 const cors = require('cors');
 const bcrypt = require('bcryptjs');
-const serverless = require('serverless-http');
 require('dotenv').config();
 
 const app = express();
@@ -361,4 +360,3 @@ app.post('/api/orders/complete', async (req, res) => {
 
 // 12. Export untuk Vercel Serverless
 module.exports = app;
-module.exports.handler = serverless(app);
