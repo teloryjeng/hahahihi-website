@@ -3,11 +3,20 @@ const { Pool } = require('pg');
 const cors = require('cors');
 const bcrypt = require('bcryptjs');
 const serverless = require('serverless-http');
+const path = require('path');
 require('dotenv').config();
 
 const app = express();
 app.use(cors());
 app.use(express.json());
+
+// Melayani file statis (CSS, JS, folder category, dll) dari root directory
+app.use(express.static(path.join(__dirname)));
+
+// PENTING: Rute eksplisit agar halaman utama (index.html) terbuka saat diakses
+app.get('/', (req, res) => {
+    res.sendFile(path.join(__dirname, 'index.html'));
+});
 
 // 1. Koneksi Database Neon (PostgreSQL)
 const pool = new Pool({
@@ -367,6 +376,5 @@ if (process.env.NODE_ENV !== 'production') {
     });
 }
 
-// Diekspor agar bisa dibaca oleh Vercel Serverless Functions
 module.exports = app;
 module.exports.handler = serverless(app);
