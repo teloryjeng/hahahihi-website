@@ -10,6 +10,18 @@
     {
       "src": "/api/(.*)",
       "dest": "server.js"
+    },
+    {
+      "src": "/(.*\\..*)",
+      "dest": "/$1"
+    },
+    {
+      "src": "/category/(.*)",
+      "dest": "/category/$1"
+    },
+    {
+      "src": "/(.*)",
+      "dest": "/index.html"
     }
   ]
 }
