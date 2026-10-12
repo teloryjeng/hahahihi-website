@@ -15,6 +15,7 @@
     "bootstrap-icons": "^1.13.1",
     "cors": "^2.8.6",
     "express": "^5.2.1",
-    "mysql2": "^3.22.3"
+    "mysql2": "^3.22.3",
+    "serverless-http": "^4.0.0"
   }
 }

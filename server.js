@@ -1,64 +1,66 @@
 const express = require('express');
-const mysql = require('mysql2');
+const { Pool } = require('pg');
 const cors = require('cors');
 const bcrypt = require('bcryptjs');
+const serverless = require('serverless-http');
+require('dotenv').config();
 
 const app = express();
 app.use(cors());
 app.use(express.json());
 
-// 1. Koneksi Database
-const db = mysql.createConnection({
-    host: 'localhost',
-    user: 'root',
-    password: '',
-    database: 'hahahihi'
+// 1. Koneksi Database Neon (PostgreSQL)
+const pool = new Pool({
+    connectionString: process.env.DATABASE_URL,
+    ssl: { rejectUnauthorized: false }
 });
 
-db.connect(err => {
+pool.connect((err, client, release) => {
     if (err) {
-        console.error('Koneksi database gagal:', err);
+        console.error('Koneksi database gagal:', err.stack);
         return;
     }
-    console.log('Berhasil terhubung ke database MySQL!');
+    console.log('Berhasil terhubung ke database Neon (PostgreSQL)!');
+    release();
 });
 
 // 2. Endpoint API Filter Fleksibel
-app.get('/api/products/filter', (req, res) => {
-    const category = req.query.category;
-    const gender = req.query.gender;
-    const search = req.query.search;
-    const page = parseInt(req.query.page) || 1;
-    const limit = parseInt(req.query.limit) || 8;
-    const offset = (page - 1) * limit;
+app.get('/api/products/filter', async (req, res) => {
+    try {
+        const category = req.query.category;
+        const gender = req.query.gender;
+        const search = req.query.search;
+        const page = parseInt(req.query.page) || 1;
+        const limit = parseInt(req.query.limit) || 8;
+        const offset = (page - 1) * limit;
 
-    let sql = 'SELECT * FROM products WHERE 1=1';
-    let countSql = 'SELECT COUNT(*) as total FROM products WHERE 1=1';
-    let params = [];
+        let conditions = ['1=1'];
+        let params = [];
+        let paramIndex = 1;
 
-    if (category) {
-        sql += ' AND category = ?';
-        countSql += ' AND category = ?';
-        params.push(category);
-    }
+        if (category) {
+            conditions.push(`category = $${paramIndex++}`);
+            params.push(category);
+        }
 
-    if (gender) {
-        sql += ' AND (gender = ? OR gender = "Unisex")';
-        countSql += ' AND (gender = ? OR gender = "Unisex")';
-        params.push(gender);
-    }
+        if (gender) {
+            conditions.push(`(gender = $${paramIndex++} OR gender = 'Unisex')`);
+            params.push(gender);
+        }
 
-    if (search) {
-        sql += ' AND name LIKE ?';
-        countSql += ' AND name LIKE ?';
-        params.push(`%${search}%`);
-    }
+        if (search) {
+            conditions.push(`name ILIKE $${paramIndex++}`);
+            params.push(`%${search}%`);
+        }
 
-    db.query(countSql, params, (err, countResults) => {
-        if (err) return res.status(500).json({ error: err.message });
-        const total = countResults[0].total;
+        const whereClause = conditions.join(' AND ');
+        const countSql = `SELECT COUNT(*) as total FROM _products WHERE ${whereClause}`;
+        
+        const countResult = await pool.query(countSql, params);
+        const total = parseInt(countResult.rows[0].total);
         const totalPages = Math.ceil(total / limit);
 
+        let sql = `SELECT * FROM _products WHERE ${whereClause}`;
         const sort = req.query.sort;
         if (sort === 'price_asc') {
             sql += ' ORDER BY price ASC';
@@ -70,34 +72,33 @@ app.get('/api/products/filter', (req, res) => {
             sql += ' ORDER BY id DESC';
         }
 
-        sql += ' LIMIT ? OFFSET ?';
-        let queryParams = [...params, limit, offset];
+        sql += ` LIMIT $${paramIndex++} OFFSET $${paramIndex++}`;
+        params.push(limit, offset);
 
-        db.query(sql, queryParams, (err, results) => {
-            if (err) return res.status(500).json({ error: err.message });
-            res.json({
-                products: results,
-                currentPage: page,
-                totalPages: totalPages
-            });
+        const results = await pool.query(sql, params);
+        res.json({
+            products: results.rows,
+            currentPage: page,
+            totalPages: totalPages
         });
-    });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
 });
 
 // 3. Endpoint API New Arrivals
-app.get('/api/products/new-arrivals', (req, res) => {
-    const limit = parseInt(req.query.limit) || 8;
-    const page = parseInt(req.query.page) || 1;
-    const offset = (page - 1) * limit;
+app.get('/api/products/new-arrivals', async (req, res) => {
+    try {
+        const limit = parseInt(req.query.limit) || 8;
+        const page = parseInt(req.query.page) || 1;
+        const offset = (page - 1) * limit;
 
-    const countSql = 'SELECT COUNT(*) as total FROM products';
-    db.query(countSql, (err, countResults) => {
-        if (err) return res.status(500).json({ error: err.message });
-        const total = countResults[0].total;
+        const countResult = await pool.query('SELECT COUNT(*) as total FROM _products');
+        const total = parseInt(countResult.rows[0].total);
         const totalPages = Math.ceil(total / limit);
 
         const sort = req.query.sort;
-        let sql = 'SELECT * FROM products';
+        let sql = 'SELECT * FROM _products';
         if (sort === 'price_asc') {
             sql += ' ORDER BY price ASC';
         } else if (sort === 'price_desc') {
@@ -107,54 +108,41 @@ app.get('/api/products/new-arrivals', (req, res) => {
         } else {
             sql += ' ORDER BY id DESC';
         }
-        sql += ' LIMIT ? OFFSET ?';
-        db.query(sql, [limit, offset], (err, results) => {
-            if (err) return res.status(500).json({ error: err.message });
-            res.json({
-                products: results,
-                currentPage: page,
-                totalPages: totalPages
-            });
+        sql += ' LIMIT $1 OFFSET $2';
+        
+        const results = await pool.query(sql, [limit, offset]);
+        res.json({
+            products: results.rows,
+            currentPage: page,
+            totalPages: totalPages
         });
-    });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
 });
 
 // 4. Endpoint API Single Product
-app.get('/api/products/detail/:id', (req, res) => {
-    const id = req.params.id;
-    const sqlProduct = 'SELECT * FROM products WHERE id = ?';
-    const sqlImages = 'SELECT * FROM product_images WHERE product_id = ?';
-    const sqlSizes = 'SELECT * FROM product_sizes WHERE product_id = ?';
-
-    db.query(sqlProduct, [id], (err, productResults) => {
-        if (err) {
-            res.status(500).json({ error: err.message });
-            return;
-        }
-        if (productResults.length === 0) {
-            res.status(404).json({ error: 'Product not found' });
-            return;
+app.get('/api/products/detail/:id', async (req, res) => {
+    try {
+        const id = req.params.id;
+        const productResult = await pool.query('SELECT * FROM _products WHERE id = $1', [id]);
+        
+        if (productResult.rows.length === 0) {
+            return res.status(404).json({ error: 'Product not found' });
         }
 
-        const product = productResults[0];
+        const product = productResult.rows[0];
 
-        db.query(sqlImages, [id], (err, imagesResults) => {
-            if (err) {
-                res.status(500).json({ error: err.message });
-                return;
-            }
-            product.images = imagesResults;
+        const imagesResult = await pool.query('SELECT * FROM _product_images WHERE product_id = $1', [id]);
+        product.images = imagesResult.rows;
 
-            db.query(sqlSizes, [id], (err, sizesResults) => {
-                if (err) {
-                    res.status(500).json({ error: err.message });
-                    return;
-                }
-                product.sizes = sizesResults;
-                res.json(product);
-            });
-        });
-    });
+        const sizesResult = await pool.query('SELECT * FROM _product_sizes WHERE product_id = $1', [id]);
+        product.sizes = sizesResult.rows;
+
+        res.json(product);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
 });
 
 // 5. Endpoint API Register
@@ -166,164 +154,155 @@ app.post('/api/auth/register', async (req, res) => {
     }
 
     try {
-        // Cek apakah email sudah terdaftar
-        db.query('SELECT * FROM users WHERE email = ?', [email], async (err, results) => {
-            if (err) return res.status(500).json({ error: err.message });
-            
-            if (results.length > 0) {
-                return res.status(400).json({ error: 'Email already registered' });
-            }
+        const userCheck = await pool.query('SELECT * FROM _users WHERE email = $1', [email]);
+        if (userCheck.rows.length > 0) {
+            return res.status(400).json({ error: 'Email already registered' });
+        }
 
-            // Hash password
-            const hashedPassword = await bcrypt.hash(password, 10);
+        const hashedPassword = await bcrypt.hash(password, 10);
+        const insertSql = 'INSERT INTO _users (name, email, password, created_at) VALUES ($1, $2, $3, NOW()) RETURNING id';
+        const result = await pool.query(insertSql, [name, email, hashedPassword]);
 
-            // Simpan ke database
-            const sql = 'INSERT INTO users (name, email, password) VALUES (?, ?, ?)';
-            db.query(sql, [name, email, hashedPassword], (err, result) => {
-                if (err) return res.status(500).json({ error: err.message });
-                res.status(201).json({ message: 'Registration successful', userId: result.insertId });
-            });
-        });
+        res.status(201).json({ message: 'Registration successful', userId: result.rows[0].id });
     } catch (err) {
-        res.status(500).json({ error: 'An error occurred while contacting the server' });
+        res.status(500).json({ error: err.message });
     }
 });
 
 // 6. Endpoint API Login
-app.post('/api/auth/login', (req, res) => {
-    const { email, password } = req.body;
+app.post('/api/auth/login', async (req, res) => {
+    try {
+        const { email, password } = req.body;
 
-    if (!email || !password) {
-        return res.status(400).json({ error: 'Email and password must be filled' });
-    }
+        if (!email || !password) {
+            return res.status(400).json({ error: 'Email and password must be filled' });
+        }
 
-    db.query('SELECT * FROM users WHERE email = ?', [email], async (err, results) => {
-        if (err) return res.status(500).json({ error: err.message });
-
-        if (results.length === 0) {
+        const result = await pool.query('SELECT * FROM _users WHERE email = $1', [email]);
+        if (result.rows.length === 0) {
             return res.status(401).json({ error: 'Email atau password salah' });
         }
 
-        const user = results[0];
+        const user = result.rows[0];
         const isMatch = await bcrypt.compare(password, user.password);
 
         if (!isMatch) {
             return res.status(401).json({ error: 'Email or password incorrect' });
         }
 
-        // Jangan kirim password kembali ke client
         delete user.password;
         res.json({ message: 'Login successfull', user });
-    });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
 });
 
 // 7. Endpoints API Cart
-// Mengambil item di keranjang milik user tertentu
-app.get('/api/cart', (req, res) => {
-    const userId = req.query.user_id;
-    if (!userId) return res.status(400).json({ error: 'user_id diperlukan' });
+app.get('/api/cart', async (req, res) => {
+    try {
+        const userId = req.query.user_id;
+        if (!userId) return res.status(400).json({ error: 'user_id diperlukan' });
 
-    const sql = `
-        SELECT c.id as cart_id, c.user_id, c.product_id, c.size, c.quantity, 
-               p.name, p.price, p.image, p.category,
-               (SELECT stock FROM product_sizes WHERE product_id = c.product_id AND size_name = c.size LIMIT 1) as stock
-        FROM cart c
-        LEFT JOIN products p ON c.product_id = p.id
-        WHERE c.user_id = ?
-        ORDER BY c.id DESC
-    `;
-    db.query(sql, [userId], (err, results) => {
-        if (err) return res.status(500).json({ error: err.message });
-        res.json(results);
-    });
+        const sql = `
+            SELECT c.id as cart_id, c.user_id, c.product_id, c.size, c.quantity, 
+                   p.name, p.price, p.image, p.category,
+                   (SELECT stock FROM _product_sizes WHERE product_id = c.product_id AND size_name = c.size LIMIT 1) as stock
+            FROM _cart c
+            LEFT JOIN _products p ON c.product_id = p.id
+            WHERE c.user_id = $1
+            ORDER BY c.id DESC
+        `;
+        const results = await pool.query(sql, [userId]);
+        res.json(results.rows);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
 });
 
-// Menambahkan item ke keranjang
-app.post('/api/cart', (req, res) => {
-    const { user_id, product_id, size, quantity } = req.body;
-    if (!user_id || !product_id || !size) return res.status(400).json({ error: 'Data tidak lengkap' });
+app.post('/api/cart', async (req, res) => {
+    try {
+        const { user_id, product_id, size, quantity } = req.body;
+        if (!user_id || !product_id || !size) return res.status(400).json({ error: 'Data tidak lengkap' });
 
-    const qty = quantity || 1;
+        const qty = quantity || 1;
 
-    // Cek apakah item dengan product_id dan size yang sama sudah ada di keranjang user
-    const checkSql = 'SELECT id, quantity FROM cart WHERE user_id = ? AND product_id = ? AND size = ?';
-    db.query(checkSql, [user_id, product_id, size], (err, results) => {
-        if (err) return res.status(500).json({ error: err.message });
+        const checkSql = 'SELECT id, quantity FROM _cart WHERE user_id = $1 AND product_id = $2 AND size = $3';
+        const checkResult = await pool.query(checkSql, [user_id, product_id, size]);
 
-        if (results.length > 0) {
-            // Jika ada, update quantity
-            const cartId = results[0].id;
-            const newQty = results[0].quantity + qty;
-            db.query('UPDATE cart SET quantity = ? WHERE id = ?', [newQty, cartId], (err, updateResult) => {
-                if (err) return res.status(500).json({ error: err.message });
-                res.json({ message: 'Quantity updated', cart_id: cartId, new_quantity: newQty });
-            });
+        if (checkResult.rows.length > 0) {
+            const cartId = checkResult.rows[0].id;
+            const newQty = checkResult.rows[0].quantity + qty;
+            await pool.query('UPDATE _cart SET quantity = $1 WHERE id = $2', [newQty, cartId]);
+            res.json({ message: 'Quantity updated', cart_id: cartId, new_quantity: newQty });
         } else {
-            // Jika belum ada, insert baru
-            const insertSql = 'INSERT INTO cart (user_id, product_id, size, quantity) VALUES (?, ?, ?, ?)';
-            db.query(insertSql, [user_id, product_id, size, qty], (err, insertResult) => {
-                if (err) return res.status(500).json({ error: err.message });
-                res.status(201).json({ message: 'Item added to cart', cart_id: insertResult.insertId });
-            });
+            const insertSql = 'INSERT INTO _cart (user_id, product_id, size, quantity) VALUES ($1, $2, $3, $4) RETURNING id';
+            const insertResult = await pool.query(insertSql, [user_id, product_id, size, qty]);
+            res.status(201).json({ message: 'Item added to cart', cart_id: insertResult.rows[0].id });
         }
-    });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
 });
 
-// Update quantity di keranjang
-app.put('/api/cart/:id', (req, res) => {
-    const cartId = req.params.id;
-    const { quantity } = req.body;
-    
-    if (!quantity || quantity < 1) return res.status(400).json({ error: 'Quantity tidak valid' });
+app.put('/api/cart/:id', async (req, res) => {
+    try {
+        const cartId = req.params.id;
+        const { quantity } = req.body;
+        
+        if (!quantity || quantity < 1) return res.status(400).json({ error: 'Quantity tidak valid' });
 
-    db.query('UPDATE cart SET quantity = ? WHERE id = ?', [quantity, cartId], (err, result) => {
-        if (err) return res.status(500).json({ error: err.message });
+        await pool.query('UPDATE _cart SET quantity = $1 WHERE id = $2', [quantity, cartId]);
         res.json({ message: 'Quantity updated' });
-    });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
 });
 
-// Hapus semua item dari keranjang user
-app.delete('/api/cart/user/:userId', (req, res) => {
-    const userId = req.params.userId;
-    db.query('DELETE FROM cart WHERE user_id = ?', [userId], (err, result) => {
-        if (err) return res.status(500).json({ error: err.message });
+app.delete('/api/cart/user/:userId', async (req, res) => {
+    try {
+        const userId = req.params.userId;
+        await pool.query('DELETE FROM _cart WHERE user_id = $1', [userId]);
         res.json({ message: 'All items removed from cart' });
-    });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
 });
-app.delete('/api/cart/:id', (req, res) => {
-    const cartId = req.params.id;
-    db.query('DELETE FROM cart WHERE id = ?', [cartId], (err, result) => {
-        if (err) return res.status(500).json({ error: err.message });
+
+app.delete('/api/cart/:id', async (req, res) => {
+    try {
+        const cartId = req.params.id;
+        await pool.query('DELETE FROM _cart WHERE id = $1', [cartId]);
         res.json({ message: 'Item removed from cart' });
-    });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
 });
 
 // 9. Endpoints API Profile
-// Update Username
-app.put('/api/auth/update-name', (req, res) => {
-    const { user_id, new_name } = req.body;
-    if (!user_id || !new_name) return res.status(400).json({ error: 'user_id dan new_name diperlukan' });
+app.put('/api/auth/update-name', async (req, res) => {
+    try {
+        const { user_id, new_name } = req.body;
+        if (!user_id || !new_name) return res.status(400).json({ error: 'user_id dan new_name diperlukan' });
 
-    db.query('UPDATE users SET name = ? WHERE id = ?', [new_name, user_id], (err, result) => {
-        if (err) return res.status(500).json({ error: err.message });
-        if (result.affectedRows === 0) return res.status(404).json({ error: 'User tidak ditemukan' });
+        const result = await pool.query('UPDATE _users SET name = $1 WHERE id = $2', [new_name, user_id]);
+        if (result.rowCount === 0) return res.status(404).json({ error: 'User tidak ditemukan' });
         res.json({ message: 'Username updated successfully' });
-    });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
 });
 
-// Change Password
 app.put('/api/auth/change-password', async (req, res) => {
-    const { user_id, current_password, new_password } = req.body;
-    
-    if (!user_id || !current_password || !new_password) {
-        return res.status(400).json({ error: 'Data tidak lengkap' });
-    }
+    try {
+        const { user_id, current_password, new_password } = req.body;
+        if (!user_id || !current_password || !new_password) {
+            return res.status(400).json({ error: 'Data tidak lengkap' });
+        }
 
-    db.query('SELECT password FROM users WHERE id = ?', [user_id], async (err, results) => {
-        if (err) return res.status(500).json({ error: err.message });
-        if (results.length === 0) return res.status(404).json({ error: 'User tidak ditemukan' });
+        const result = await pool.query('SELECT password FROM _users WHERE id = $1', [user_id]);
+        if (result.rows.length === 0) return res.status(404).json({ error: 'User tidak ditemukan' });
 
-        const user = results[0];
+        const user = result.rows[0];
         const isMatch = await bcrypt.compare(current_password, user.password);
 
         if (!isMatch) {
@@ -331,80 +310,63 @@ app.put('/api/auth/change-password', async (req, res) => {
         }
 
         const hashedNewPassword = await bcrypt.hash(new_password, 10);
-        db.query('UPDATE users SET password = ? WHERE id = ?', [hashedNewPassword, user_id], (err, result) => {
-            if (err) return res.status(500).json({ error: err.message });
-            res.json({ message: 'Password updated successfully' });
-        });
-    });
+        await pool.query('UPDATE _users SET password = $1 WHERE id = $2', [hashedNewPassword, user_id]);
+        res.json({ message: 'Password updated successfully' });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
 });
 
-// Delete Account
-app.delete('/api/auth/delete-account/:id', (req, res) => {
-    const userId = req.params.id;
-    // Hapus data cart terkait dulu
-    db.query('DELETE FROM cart WHERE user_id = ?', [userId], (err) => {
-        if (err) return res.status(500).json({ error: err.message });
-        
-        db.query('DELETE FROM users WHERE id = ?', [userId], (err, result) => {
-            if (err) return res.status(500).json({ error: err.message });
-            res.json({ message: 'Account deleted successfully' });
-        });
-    });
+app.delete('/api/auth/delete-account/:id', async (req, res) => {
+    try {
+        const userId = req.params.id;
+        await pool.query('DELETE FROM _cart WHERE user_id = $1', [userId]);
+        await pool.query('DELETE FROM _users WHERE id = $1', [userId]);
+        res.json({ message: 'Account deleted successfully' });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
 });
 
 // 11. Endpoint API Complete Order (Payment)
-app.post('/api/orders/complete', (req, res) => {
-    const { user_id } = req.body;
-    if (!user_id) return res.status(400).json({ error: 'user_id diperlukan' });
+app.post('/api/orders/complete', async (req, res) => {
+    const client = await pool.connect();
+    try {
+        const { user_id } = req.body;
+        if (!user_id) return res.status(400).json({ error: 'user_id diperlukan' });
 
-    // 1. Ambil semua item di keranjang user
-    db.query('SELECT * FROM cart WHERE user_id = ?', [user_id], (err, items) => {
-        if (err) return res.status(500).json({ error: err.message });
+        const itemsResult = await client.query('SELECT * FROM _cart WHERE user_id = $1', [user_id]);
+        const items = itemsResult.rows;
+
         if (items.length === 0) return res.status(400).json({ error: 'Keranjang kosong' });
 
-        // Memulai transaksi database
-        db.beginTransaction(err => {
-            if (err) return res.status(500).json({ error: err.message });
+        await client.query('BEGIN');
 
-            let processed = 0;
-            let errorOccurred = false;
+        for (let item of items) {
+            const updateStockSql = 'UPDATE _product_sizes SET stock = stock - $1 WHERE product_id = $2 AND size_name = $3';
+            await client.query(updateStockSql, [item.quantity, item.product_id, item.size]);
+        }
 
-            items.forEach(item => {
-                if (errorOccurred) return;
+        await client.query('DELETE FROM _cart WHERE user_id = $1', [user_id]);
+        await client.query('COMMIT');
 
-                // 2. Kurangi stok di tabel product_sizes
-                const updateStockSql = 'UPDATE product_sizes SET stock = stock - ? WHERE product_id = ? AND size_name = ?';
-                db.query(updateStockSql, [item.quantity, item.product_id, item.size], (err, result) => {
-                    if (err) {
-                        if (errorOccurred) return;
-                        errorOccurred = true;
-                        return db.rollback(() => {
-                            res.status(500).json({ error: 'Gagal update stok: ' + err.message });
-                        });
-                    }
+        res.json({ message: 'Pembayaran berhasil dikonfirmasi, stok telah diperbarui.' });
+    } catch (err) {
+        await client.query('ROLLBACK');
+        res.status(500).json({ error: 'Gagal memproses pesanan: ' + err.message });
+    } finally {
+        client.release();
+    }
+});
 
-                    processed++;
-                    // Jika semua item sudah diproses
-                    if (processed === items.length) {
-                        // 3. Hapus isi keranjang user
-                        db.query('DELETE FROM cart WHERE user_id = ?', [user_id], (err) => {
-                            if (err) return db.rollback(() => res.status(500).json({ error: 'Gagal hapus cart: ' + err.message }));
-
-                            // Selesaikan transaksi
-                            db.commit(err => {
-                                if (err) return db.rollback(() => res.status(500).json({ error: 'Gagal commit transaksi' }));
-                                res.json({ message: 'Pembayaran berhasil dikonfirmasi, stok telah diperbarui.' });
-                            });
-                        });
-                    }
-                });
-            });
-        });
+// 12. Mode Lokal & Ekspor Serverless untuk Vercel
+if (process.env.NODE_ENV !== 'production') {
+    const PORT = process.env.PORT || 3000;
+    app.listen(PORT, () => {
+        console.log(`Server lokal berjalan di http://localhost:${PORT}`);
     });
-});
+}
 
-// 12. Menjalankan Server
-const PORT = 3000;
-app.listen(PORT, () => {
-    console.log(`Server Node.js berjalan di http://localhost:${PORT}`);
-});
+// Diekspor agar bisa dibaca oleh Vercel Serverless Functions
+module.exports = app;
+module.exports.handler = serverless(app);
