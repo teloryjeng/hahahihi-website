@@ -35,7 +35,7 @@
                 </div>
 
                 <div class="qr-container p-2 border rounded bg-white mb-4 shadow-sm mx-auto" style="max-width: 300px;">
-                    <img src="./asset/img/payment/qr.png" alt="QRIS Payment" class="img-fluid w-100">
+                    <img src="/asset/img/payment/qr.png" alt="QRIS Payment" class="img-fluid w-100">
                 </div>
 
                 <div class="alert alert-warning small text-start mb-4 border-0" style="background-color: #fff9e6;">
@@ -48,7 +48,7 @@
                 </div>
 
                 <button class="btn btn-secondary w-100 py-3 fw-bold shadow-sm" id="countdownBtn" disabled>Checking Payment... 30s</button>
-                <a href="index.html" class="btn btn-link text-muted mt-3 text-decoration-none small">Pay Later / Back to Home</a>
+                <a href="/index.html" class="btn btn-link text-muted mt-3 text-decoration-none small">Pay Later / Back to Home</a>
             </div>
         </div>
     </section>
@@ -80,12 +80,12 @@
             async function processPayment() {
                 const user = JSON.parse(localStorage.getItem('user'));
                 if (!user) {
-                    window.location.href = "signin.html";
+                    window.location.href = "/signin.html";
                     return;
                 }
 
                 try {
-                    const response = await fetch('http://localhost:3000/api/orders/complete', {
+                    const response = await fetch('/api/orders/complete', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ user_id: user.id })
@@ -94,7 +94,7 @@
                     const data = await response.json();
 
                     if (response.ok) {
-                        showOverlay("<b>Payment successful!</b><br><br>Thank you for shopping at Haha Hihi Kidswear. Shipping details will be sent via email.", true, "index.html");
+                        showOverlay("<b>Payment successful!</b><br><br>Thank you for shopping at Haha Hihi Kidswear. Shipping details will be sent via email.", true, "/index.html");
                     } else {
                         showOverlay("Payment failed! " + (data.error || "Something went wrong"), false);
                         countdownBtn.textContent = "Payment Failed";
