@@ -1,7 +1,6 @@
 // script/register.js
 
 function showOverlay(message, isSuccess, redirectUrl = null) {
-    // Buat elemen overlay
     const overlay = document.createElement('div');
     overlay.style.position = 'fixed';
     overlay.style.top = '0';
@@ -13,11 +12,9 @@ function showOverlay(message, isSuccess, redirectUrl = null) {
     overlay.style.justifyContent = 'center';
     overlay.style.alignItems = 'center';
     overlay.style.zIndex = '9999';
-
     overlay.style.opacity = '0';
     overlay.style.transition = 'opacity 0.3s ease-out';
 
-    // Buat kotak pesan
     const box = document.createElement('div');
     box.style.backgroundColor = '#fff';
     box.style.padding = '30px';
@@ -30,28 +27,25 @@ function showOverlay(message, isSuccess, redirectUrl = null) {
     box.style.opacity = '0';
     box.style.transition = 'all 0.3s ease-out';
 
-    // Ikon (Menggunakan Bootstrap Icons)
     const icon = document.createElement('div');
     icon.innerHTML = isSuccess ? '<i class="bi bi-check-circle-fill text-success" style="font-size: 3rem;"></i>' : '<i class="bi bi-x-circle-fill text-danger" style="font-size: 3rem;"></i>';
     icon.style.marginBottom = '15px';
 
-    // Teks
     const text = document.createElement('p');
     text.textContent = message;
     text.style.fontSize = '1.1rem';
     text.style.marginBottom = '20px';
 
-    // Tombol
     const btn = document.createElement('button');
     btn.textContent = 'OK';
     btn.className = 'btn ' + (isSuccess ? 'btn-dark' : 'btn-outline-dark');
     btn.style.width = '100%';
-    
+
     btn.addEventListener('click', () => {
         overlay.style.opacity = '0';
         box.style.transform = 'scale(0.8)';
         box.style.opacity = '0';
-        
+
         setTimeout(() => {
             if (document.body.contains(overlay)) {
                 document.body.removeChild(overlay);
@@ -68,7 +62,6 @@ function showOverlay(message, isSuccess, redirectUrl = null) {
     overlay.appendChild(box);
     document.body.appendChild(overlay);
 
-    // Animasi muncul (trigger reflow)
     requestAnimationFrame(() => {
         overlay.style.opacity = '1';
         box.style.transform = 'scale(1)';
@@ -78,34 +71,34 @@ function showOverlay(message, isSuccess, redirectUrl = null) {
 
 document.addEventListener('DOMContentLoaded', () => {
     const signupForm = document.getElementById('signupForm');
-    
+
     if (signupForm) {
         signupForm.addEventListener('submit', async (e) => {
-            e.preventDefault(); // Mencegah reload halaman
-            
+            e.preventDefault();
+
             const name = document.getElementById('floatingName').value;
             const email = document.getElementById('floatingInput').value;
             const password = document.getElementById('floatingPassword').value;
             const confirmPassword = document.getElementById('floatingConfirmPassword').value;
-            
+
             if (password !== confirmPassword) {
                 showOverlay('Confirm password does not match!', false);
                 return;
             }
-            
+
             try {
-                const response = await fetch('http://localhost:3000/api/auth/register', {
+                const response = await fetch('/api/auth/register', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json'
                     },
                     body: JSON.stringify({ name, email, password })
                 });
-                
+
                 const data = await response.json();
-                
+
                 if (response.ok) {
-                    showOverlay('Sign Up successful! Please Sign In.', true, 'signin.html');
+                    showOverlay('Sign Up successful! Please Sign In.', true, '/signin.html');
                 } else {
                     showOverlay('Failed: ' + data.error, false);
                 }

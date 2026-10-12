@@ -1,10 +1,9 @@
 // script/cart.js
 
 document.addEventListener('DOMContentLoaded', () => {
-    // Cek login
     const userStr = localStorage.getItem('user');
     if (!userStr) {
-        window.location.href = "signin.html";
+        window.location.href = "/signin.html";
         return;
     }
 
@@ -21,7 +20,7 @@ function loadCart(userId) {
 
     if (!container) return;
 
-    fetch(`http://localhost:3000/api/cart?user_id=${userId}`)
+    fetch(`/api/cart?user_id=${userId}`)
         .then(response => response.json())
         .then(items => {
             if (items.error) throw new Error(items.error);
@@ -30,7 +29,7 @@ function loadCart(userId) {
                 countEl.textContent = 'Items (0)';
                 container.innerHTML = '<p class="text-center text-muted py-4">Your cart is empty.</p>';
                 if (totalEl) totalEl.textContent = 'Rp0';
-                
+
                 const checkoutBtn = document.getElementById('checkoutBtn');
                 if (checkoutBtn) {
                     checkoutBtn.classList.add('disabled');
@@ -40,7 +39,7 @@ function loadCart(userId) {
 
                 const removeAllBtn = document.getElementById('removeAllBtn');
                 if (removeAllBtn) removeAllBtn.style.display = 'none';
-                
+
                 return;
             }
 
@@ -62,7 +61,9 @@ function loadCart(userId) {
                     style: 'currency', currency: 'IDR', minimumFractionDigits: 0
                 }).format(item.price);
 
-                const imagePath = item.image ? item.image.replace(/^\.\.\//, './') : './asset/img/placeholder.jpg';
+                const imagePath = item.image
+                    ? item.image.replace(/^\.\.\//, '/').replace(/^\.\//, '/')
+                    : '/asset/img/placeholder.jpg';
 
                 const isMinusDisabled = item.quantity <= 1 ? 'disabled style="cursor: not-allowed; pointer-events: auto; opacity: 0.5;"' : '';
                 const isPlusDisabled = item.quantity >= item.stock ? 'disabled style="cursor: not-allowed; pointer-events: auto; opacity: 0.5;"' : '';
@@ -74,9 +75,9 @@ function loadCart(userId) {
                         </div>
                         <div class="col-8 col-md-4">
                             <h6 class="fw-bold mb-1">${item.name}</h6>
-                            ${item.name.toLowerCase().includes('fruit charms') ? 
+                            ${item.name.toLowerCase().includes('fruit charms') ?
                                 `<p class="text-muted small mb-0">Amount: ${item.size}</p>` :
-                                (item.category && item.category.toLowerCase() === 'accessories' ? 
+                                (item.category && item.category.toLowerCase() === 'accessories' ?
                                     (function() {
                                         const colorMap = {
                                             '#000000': 'Black',
@@ -96,7 +97,7 @@ function loadCart(userId) {
                                             <p class="text-muted small mb-0 d-flex align-items-center">
                                                 Color: ${colorName} <span class="ms-1" style="display:inline-block; width:12px; height:12px; border-radius:50%; background-color:${item.size}; border:1px solid #ddd;"></span>
                                             </p>`;
-                                    })() : 
+                                    })() :
                                     `<p class="text-muted small mb-0">Size: ${item.size}</p>`)
                             }
                         </div>
@@ -129,15 +130,14 @@ function loadCart(userId) {
 }
 
 window.updateQuantity = function(cartId, newQuantity, userId, maxStock) {
-    if (newQuantity < 1) return; // Prevent 0 quantity
-    
-    // Validasi Stok Maksimal
+    if (newQuantity < 1) return;
+
     if (newQuantity > maxStock) {
         showOverlay(`Maaf, stok hanya tersedia ${maxStock} item untuk ukuran ini.`, false);
         return;
     }
-    
-    fetch(`http://localhost:3000/api/cart/${cartId}`, {
+
+    fetch(`/api/cart/${cartId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ quantity: newQuantity })
@@ -151,12 +151,11 @@ window.updateQuantity = function(cartId, newQuantity, userId, maxStock) {
 
 window.removeItem = function(cartId, userId) {
     showOverlay("Are you sure you want to remove this item from your cart?", false, null, true, () => {
-        fetch(`http://localhost:3000/api/cart/${cartId}`, {
+        fetch(`/api/cart/${cartId}`, {
             method: 'DELETE'
         })
         .then(response => response.json())
         .then(data => {
-            // Tampilkan pesan sukses sebentar lalu reload cart
             showOverlay("Item has been removed from the cart.", true);
             loadCart(userId);
         })
@@ -169,7 +168,7 @@ window.removeItem = function(cartId, userId) {
 
 window.removeAllItems = function(userId) {
     showOverlay("Are you sure you want to remove ALL items from your cart?", false, null, true, () => {
-        fetch(`http://localhost:3000/api/cart/user/${userId}`, {
+        fetch(`/api/cart/user/${userId}`, {
             method: 'DELETE'
         })
         .then(response => response.json())

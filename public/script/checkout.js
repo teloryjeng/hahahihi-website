@@ -3,7 +3,7 @@
 document.addEventListener('DOMContentLoaded', () => {
     const userStr = localStorage.getItem('user');
     if (!userStr) {
-        window.location.href = "signin.html";
+        window.location.href = "/signin.html";
         return;
     }
 
@@ -16,17 +16,14 @@ document.addEventListener('DOMContentLoaded', () => {
     if (checkoutForm) {
         checkoutForm.addEventListener('submit', (e) => {
             e.preventDefault();
-            
-            // Tampilkan custom overlay konfirmasi sebelum memesan
+
             showOverlay("Are you sure the address data is correct and you want to process this order?", false, null, true, () => {
                 const total = document.getElementById('total-price').textContent;
-                // Alihkan ke halaman pembayaran dengan membawa total harga
-                window.location.href = `payment.html?total=${encodeURIComponent(total)}`;
+                window.location.href = `/payment.html?total=${encodeURIComponent(total)}`;
             });
         });
     }
 
-    // Membatasi input hanya angka untuk No Telepon dan Kode Pos
     const phoneInput = document.getElementById('phoneNumber');
     const postalInput = document.getElementById('postalCode');
 
@@ -49,13 +46,13 @@ function loadCheckoutData(userId) {
     const totalEl = document.getElementById('total-price');
     const summaryEl = document.getElementById('checkout-items-summary');
 
-    fetch(`http://localhost:3000/api/cart?user_id=${userId}`)
+    fetch(`/api/cart?user_id=${userId}`)
         .then(response => response.json())
         .then(items => {
             if (items.error) throw new Error(items.error);
 
             if (items.length === 0) {
-                window.location.href = "cart.html";
+                window.location.href = "/cart.html";
                 return;
             }
 
@@ -74,9 +71,9 @@ function loadCheckoutData(userId) {
             });
 
             summaryEl.innerHTML = summaryHTML;
-            
+
             const shipping = 20000;
-            const tax = subtotal * 0.11; // PPN 11%
+            const tax = subtotal * 0.11;
             const total = subtotal + shipping + tax;
 
             subtotalEl.textContent = formatPrice(subtotal);

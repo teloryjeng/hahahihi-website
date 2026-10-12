@@ -1,67 +1,71 @@
 if (history.scrollRestoration) {
     history.scrollRestoration = 'manual';
 }
-
-// Memaksa halaman untuk selalu mulai dari kordinat paling atas (X:0, Y:0)
 window.scrollTo(0, 0);
-// Memuat Header
-fetch('/header.html')
-    .then(response => response.text())
-    .then(data => {
-        document.getElementById('header-placeholder').innerHTML = data;
-        updateAuthDisplay();
-    });
+
+document.addEventListener('DOMContentLoaded', () => {
+    // Load Header
+    fetch('/header.html')
+        .then(response => {
+            if (!response.ok) throw new Error(`Header not found: ${response.status}`);
+            return response.text();
+        })
+        .then(data => {
+            const placeholder = document.getElementById('header-placeholder');
+            if (placeholder) {
+                placeholder.innerHTML = data;
+                updateAuthDisplay();
+            }
+        })
+        .catch(err => console.error('Header error:', err));
+
+    // Load Footer
+    fetch('/footer.html')
+        .then(response => {
+            if (!response.ok) throw new Error(`Footer not found: ${response.status}`);
+            return response.text();
+        })
+        .then(data => {
+            const placeholder = document.getElementById('footer-placeholder');
+            if (placeholder) placeholder.innerHTML = data;
+        })
+        .catch(err => console.error('Footer error:', err));
+});
 
 function updateAuthDisplay() {
     const userStr = localStorage.getItem('user');
     const dropdownMenu = document.querySelector('.dropdown-menu-end');
-    
+
     if (userStr && dropdownMenu) {
         const user = JSON.parse(userStr);
-        // Ubah isi dropdown jika user sudah login
         dropdownMenu.innerHTML = `
             <li><a class="dropdown-item fw-bold text-dark" href="/profile.html"><i class="bi bi-person me-2"></i>${user.name}</a></li>
             <li><hr class="dropdown-divider"></li>
             <li><a class="dropdown-item text-danger" href="#" id="logoutBtn"><i class="bi bi-box-arrow-right me-2"></i>Logout</a></li>
         `;
-        
-        // Logika Logout
+
         const logoutBtn = document.getElementById('logoutBtn');
         if (logoutBtn) {
             logoutBtn.addEventListener('click', (e) => {
                 e.preventDefault();
                 localStorage.removeItem('user');
-                window.location.reload(); // Refresh halaman setelah logout
+                window.location.reload();
             });
         }
     }
 }
 
-// Memuat Footer
-fetch('/footer.html')
-    .then(response => response.text())
-    .then(data => {
-        document.getElementById('footer-placeholder').innerHTML = data;
-    });
-
 // ==========================================
 // FUNGSI ANIMASI SEARCH MENGGUNAKAN JQUERY
 // ==========================================
-
 $(document).ready(function() {
-    // Menggunakan event delegation $(document).on() 
-    // karena header.html dimuat secara dinamis (menyusul)
     $(document).on('click', '#searchToggleBtn', function() {
         var $searchInput = $('#searchInput');
-        
-        // Menambah atau menghapus class 'show'
         $searchInput.toggleClass('show');
-        
-        // Memfokuskan kursor jika kotak sedang terbuka
+
         if ($searchInput.hasClass('show')) {
             $searchInput.focus();
         } else {
-            // Jika ditutup, lakukan pencarian jika ada teks
             var query = $searchInput.val().trim();
             if (query) {
                 window.location.href = '/search.html?q=' + encodeURIComponent(query);
@@ -69,9 +73,8 @@ $(document).ready(function() {
         }
     });
 
-    // Jalankan pencarian saat menekan tombol Enter
     $(document).on('keypress', '#searchInput', function(e) {
-        if (e.which == 13) { // 13 adalah kode tombol Enter
+        if (e.which == 13) {
             var query = $(this).val().trim();
             if (query) {
                 window.location.href = '/search.html?q=' + encodeURIComponent(query);
@@ -79,11 +82,10 @@ $(document).ready(function() {
         }
     });
 
-    // FUNGSI SHOW/HIDE PASSWORD
     $(document).on('click', '.toggle-password', function() {
         const input = $(this).siblings('input');
         const icon = $(this).find('i');
-        
+
         if (input.attr('type') === 'password') {
             input.attr('type', 'text');
             icon.removeClass('bi-eye').addClass('bi-eye-slash');
@@ -94,9 +96,8 @@ $(document).ready(function() {
     });
 });
 
-// GLOBAL OVERLAY FUNCTION (Bisa dipanggil dari script mana saja)
+// GLOBAL OVERLAY FUNCTION
 function showOverlay(message, isSuccess, redirectUrl = null, isConfirm = false, onConfirm = null) {
-    // Hapus overlay lama jika ada
     const existing = document.getElementById('global-overlay');
     if (existing) document.body.removeChild(existing);
 
@@ -116,7 +117,7 @@ function showOverlay(message, isSuccess, redirectUrl = null, isConfirm = false, 
     `;
 
     const icon = isConfirm ? 'bi-question-circle text-warning' : (isSuccess ? 'bi-check-circle-fill text-success' : 'bi-x-circle-fill text-danger');
-    
+
     box.innerHTML = `
         <div class="mb-3"><i class="bi ${icon}" style="font-size: 3.5rem;"></i></div>
         <h5 class="mb-3">${isConfirm ? 'Confirmation' : (isSuccess ? 'Success' : 'Failed')}</h5>
@@ -127,7 +128,7 @@ function showOverlay(message, isSuccess, redirectUrl = null, isConfirm = false, 
     const btnOk = document.createElement('button');
     btnOk.className = `btn ${isSuccess ? 'btn-dark' : 'btn-outline-dark'} flex-grow-1 py-2`;
     btnOk.textContent = isConfirm ? 'Yes, Continue' : 'OK';
-    
+
     btnOk.onclick = () => {
         close();
         if (isConfirm && typeof onConfirm === 'function') onConfirm();
@@ -135,8 +136,6 @@ function showOverlay(message, isSuccess, redirectUrl = null, isConfirm = false, 
     };
 
     const btnsContainer = box.querySelector('#overlay-btns');
-    
-    // Masukkan tombol OK/Lanjutkan terlebih dahulu agar di kiri
     btnsContainer.appendChild(btnOk);
 
     if (isConfirm) {
@@ -155,7 +154,7 @@ function showOverlay(message, isSuccess, redirectUrl = null, isConfirm = false, 
 
     overlay.appendChild(box);
     document.body.appendChild(overlay);
-    
+
     requestAnimationFrame(() => {
         overlay.style.opacity = '1';
         box.style.transform = 'scale(1)';
@@ -163,14 +162,11 @@ function showOverlay(message, isSuccess, redirectUrl = null, isConfirm = false, 
 }
 
 document.addEventListener('contextmenu', function(e) {
-  if (e.target.nodeName === 'IMG') {
-    e.preventDefault();
-  }
+    if (e.target.nodeName === 'IMG') {
+        e.preventDefault();
+    }
 }, false);
 
-// ==========================================
-// SCROLL REVEAL ANIMASI QUOTE SECTION
-// ==========================================
 function initQuoteReveal() {
     const quoteSec = document.querySelector('.quote-section');
     if (quoteSec) {
@@ -178,12 +174,10 @@ function initQuoteReveal() {
             entries.forEach(entry => {
                 if (entry.isIntersecting) {
                     quoteSec.classList.add('revealed');
-                    observer.unobserve(quoteSec); // Stop observing once revealed
+                    observer.unobserve(quoteSec);
                 }
             });
-        }, {
-            threshold: 0.15 // Trigger when 15% of the section is visible
-        });
+        }, { threshold: 0.15 });
         observer.observe(quoteSec);
     }
 }

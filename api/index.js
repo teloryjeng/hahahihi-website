@@ -3,20 +3,11 @@ const { Pool } = require('pg');
 const cors = require('cors');
 const bcrypt = require('bcryptjs');
 const serverless = require('serverless-http');
-const path = require('path');
 require('dotenv').config();
 
 const app = express();
 app.use(cors());
 app.use(express.json());
-
-// Melayani file statis (CSS, JS, folder category, dll) dari root directory
-app.use(express.static(path.join(__dirname)));
-
-// PENTING: Rute eksplisit agar halaman utama (index.html) terbuka saat diakses
-app.get('/', (req, res) => {
-    res.sendFile(path.join(__dirname, 'index.html'));
-});
 
 // 1. Koneksi Database Neon (PostgreSQL)
 const pool = new Pool({
@@ -64,7 +55,7 @@ app.get('/api/products/filter', async (req, res) => {
 
         const whereClause = conditions.join(' AND ');
         const countSql = `SELECT COUNT(*) as total FROM _products WHERE ${whereClause}`;
-        
+
         const countResult = await pool.query(countSql, params);
         const total = parseInt(countResult.rows[0].total);
         const totalPages = Math.ceil(total / limit);
@@ -118,7 +109,7 @@ app.get('/api/products/new-arrivals', async (req, res) => {
             sql += ' ORDER BY id DESC';
         }
         sql += ' LIMIT $1 OFFSET $2';
-        
+
         const results = await pool.query(sql, [limit, offset]);
         res.json({
             products: results.rows,
@@ -135,7 +126,7 @@ app.get('/api/products/detail/:id', async (req, res) => {
     try {
         const id = req.params.id;
         const productResult = await pool.query('SELECT * FROM _products WHERE id = $1', [id]);
-        
+
         if (productResult.rows.length === 0) {
             return res.status(404).json({ error: 'Product not found' });
         }
@@ -157,7 +148,7 @@ app.get('/api/products/detail/:id', async (req, res) => {
 // 5. Endpoint API Register
 app.post('/api/auth/register', async (req, res) => {
     const { name, email, password } = req.body;
-    
+
     if (!name || !email || !password) {
         return res.status(400).json({ error: 'Harap isi semua field' });
     }
@@ -213,7 +204,7 @@ app.get('/api/cart', async (req, res) => {
         if (!userId) return res.status(400).json({ error: 'user_id diperlukan' });
 
         const sql = `
-            SELECT c.id as cart_id, c.user_id, c.product_id, c.size, c.quantity, 
+            SELECT c.id as cart_id, c.user_id, c.product_id, c.size, c.quantity,
                    p.name, p.price, p.image, p.category,
                    (SELECT stock FROM _product_sizes WHERE product_id = c.product_id AND size_name = c.size LIMIT 1) as stock
             FROM _cart c
@@ -257,7 +248,7 @@ app.put('/api/cart/:id', async (req, res) => {
     try {
         const cartId = req.params.id;
         const { quantity } = req.body;
-        
+
         if (!quantity || quantity < 1) return res.status(400).json({ error: 'Quantity tidak valid' });
 
         await pool.query('UPDATE _cart SET quantity = $1 WHERE id = $2', [quantity, cartId]);
@@ -368,13 +359,6 @@ app.post('/api/orders/complete', async (req, res) => {
     }
 });
 
-// 12. Mode Lokal & Ekspor Serverless untuk Vercel
-if (process.env.NODE_ENV !== 'production') {
-    const PORT = process.env.PORT || 3000;
-    app.listen(PORT, () => {
-        console.log(`Server lokal berjalan di http://localhost:${PORT}`);
-    });
-}
-
+// 12. Export untuk Vercel Serverless
 module.exports = app;
 module.exports.handler = serverless(app);
