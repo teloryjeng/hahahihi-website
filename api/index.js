@@ -8,6 +8,12 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
+const path = require('path');
+
+// Route root: serve index.html dari folder public
+app.get('/', (req, res) => {
+    res.sendFile(path.join(__dirname, '..', 'public', 'index.html'));
+});
 // ==========================================
 // 1. Koneksi Database Neon (PostgreSQL)
 // ==========================================
