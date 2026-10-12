@@ -8,22 +8,17 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
+// ==========================================
 // 1. Koneksi Database Neon (PostgreSQL)
+// ==========================================
 const pool = new Pool({
     connectionString: process.env.DATABASE_URL,
     ssl: { rejectUnauthorized: false }
 });
 
-pool.connect((err, client, release) => {
-    if (err) {
-        console.error('Koneksi database gagal:', err.stack);
-        return;
-    }
-    console.log('Berhasil terhubung ke database Neon (PostgreSQL)!');
-    release();
-});
-
+// ==========================================
 // 2. Endpoint API Filter Fleksibel
+// ==========================================
 app.get('/api/products/filter', async (req, res) => {
     try {
         const category = req.query.category;
@@ -85,7 +80,9 @@ app.get('/api/products/filter', async (req, res) => {
     }
 });
 
+// ==========================================
 // 3. Endpoint API New Arrivals
+// ==========================================
 app.get('/api/products/new-arrivals', async (req, res) => {
     try {
         const limit = parseInt(req.query.limit) || 8;
@@ -120,7 +117,9 @@ app.get('/api/products/new-arrivals', async (req, res) => {
     }
 });
 
+// ==========================================
 // 4. Endpoint API Single Product
+// ==========================================
 app.get('/api/products/detail/:id', async (req, res) => {
     try {
         const id = req.params.id;
@@ -144,7 +143,9 @@ app.get('/api/products/detail/:id', async (req, res) => {
     }
 });
 
+// ==========================================
 // 5. Endpoint API Register
+// ==========================================
 app.post('/api/auth/register', async (req, res) => {
     const { name, email, password } = req.body;
 
@@ -168,7 +169,9 @@ app.post('/api/auth/register', async (req, res) => {
     }
 });
 
+// ==========================================
 // 6. Endpoint API Login
+// ==========================================
 app.post('/api/auth/login', async (req, res) => {
     try {
         const { email, password } = req.body;
@@ -196,7 +199,9 @@ app.post('/api/auth/login', async (req, res) => {
     }
 });
 
+// ==========================================
 // 7. Endpoints API Cart
+// ==========================================
 app.get('/api/cart', async (req, res) => {
     try {
         const userId = req.query.user_id;
@@ -277,7 +282,9 @@ app.delete('/api/cart/:id', async (req, res) => {
     }
 });
 
+// ==========================================
 // 9. Endpoints API Profile
+// ==========================================
 app.put('/api/auth/update-name', async (req, res) => {
     try {
         const { user_id, new_name } = req.body;
@@ -327,7 +334,9 @@ app.delete('/api/auth/delete-account/:id', async (req, res) => {
     }
 });
 
+// ==========================================
 // 11. Endpoint API Complete Order (Payment)
+// ==========================================
 app.post('/api/orders/complete', async (req, res) => {
     const client = await pool.connect();
     try {
@@ -358,5 +367,7 @@ app.post('/api/orders/complete', async (req, res) => {
     }
 });
 
-// 12. Export untuk Vercel Serverless
+// ==========================================
+// Export untuk Vercel
+// ==========================================
 module.exports = app;
